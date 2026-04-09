@@ -1,0 +1,484 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { Leaf, Flower, Ruler, Calendar, Info, Layers, ChevronRight, Share2, Box, MousePointer2, RotateCcw, Microscope, Sprout, Wind } from 'lucide-react';
+import * as THREE from 'three';
+
+const App = () => {
+  const [activeTab, setActiveTab] = useState('overview');
+  const mountRef = useRef(null);
+  
+  // 狀態管理
+  const [selectedPart, setSelectedPart] = useState(null);
+  const [dissectedParts, setDissectedParts] = useState(new Set());
+
+  // 植物資料定義
+  const partInfo = {
+    'Petal': {
+      name: '花瓣 (Petal)',
+      desc: '粉紫色，倒卵形，四片呈現輻射對稱。',
+      func: '視覺導引與降落場。利用鮮豔色彩吸引蜂類、蝴蝶等授粉者，並提供支撐力。'
+    },
+    'LongStamen': {
+      name: '長雄蕊 (Long Stamen)',
+      desc: '紫色，藥隔基部延伸並彎曲如鐮刀，末端花藥明顯向上勾起。',
+      func: '受粉雄蕊 (Pollinating Stamens)。演化出的特殊彎曲角度能避開昆蟲採食，並將花粉精確黏附在昆蟲背部。'
+    },
+    'ShortStamen': {
+      name: '短雄蕊 (Short Stamen)',
+      desc: '黃色，短而直立，末端呈圓錐狀向上延伸。',
+      func: '餵食雄蕊 (Feeding Stamens)。利用顯眼的鮮黃色吸引昆蟲，提供少量花粉作為昆蟲食物，以換取授粉服務。'
+    },
+    'Pistil': {
+      name: '雌蕊 (Pistil)',
+      desc: '白色絲狀，柱頭微小，長度與長雄蕊相近。',
+      func: '繁衍核心。子房下位，透過柱頭接受來自異花的傳粉，是種子發育的搖籃。'
+    }
+  };
+
+  const plantData = {
+    scientificName: "Bredia oldhamii",
+    commonName: "毛布勒德藤 / 金石榴",
+    features: [
+      { 
+        id: 'stem', 
+        title: '莖的特色', 
+        icon: <Info className="w-5 h-5" />, 
+        desc: '多年生常綠亞灌木。莖枝呈極為明顯的四棱形（方形），這是野牡丹科的顯著特徵。幼嫩枝條、花梗及葉柄均密被紅褐色短腺毛。' 
+      },
+      { 
+        id: 'leaf', 
+        title: '葉片構造', 
+        icon: <Leaf className="w-5 h-5" />, 
+        desc: '葉對生，形狀為長卵形至披針形。最具辨識度的是其「基出脈」，通常具 5-7 條由葉基發出、呈弧形延伸至葉尖的縱脈。' 
+      },
+      { 
+        id: 'period', 
+        title: '花期與花序', 
+        icon: <Calendar className="w-5 h-5" />, 
+        desc: '每年 2 月至 5 月為盛花期。花序為頂生或腋生的聚繖花序。花冠粉紫色至淺紫色，單朵花雖小，但群聚綻放時極為顯眼。' 
+      },
+      { 
+        id: 'size', 
+        title: '棲地與高度', 
+        icon: <Ruler className="w-5 h-5" />, 
+        desc: '典型株高約 20 至 100 公分，生長於台灣全島中低海拔（500-2000公尺）的闊葉林緣或道路兩側。' 
+      }
+    ]
+  };
+
+  // Three.js 核心邏輯
+  useEffect(() => {
+    if (activeTab !== 'structure' || !mountRef.current) return;
+
+    const width = mountRef.current.clientWidth;
+    const height = mountRef.current.clientHeight;
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x020617); // 更深的背景色
+    const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 2000);
+    camera.position.set(0, 50, 160);
+    camera.lookAt(0, 20, 0);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setSize(width, height);
+    renderer.setPixelRatio(window.devicePixelRatio);
+    mountRef.current.appendChild(renderer.domElement);
+
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+    scene.add(ambientLight);
+    const pointLight = new THREE.PointLight(0xffffff, 1.2);
+    pointLight.position.set(40, 100, 40);
+    scene.add(pointLight);
+
+    const flowerGroup = new THREE.Group();
+    flowerGroup.scale.set(4, 4, 4);
+    flowerGroup.position.y = -12; 
+    scene.add(flowerGroup);
+
+    // 建立花朵物件
+    const createFlower = () => {
+      // 1. 花托
+      const recepGeo = new THREE.CylinderGeometry(2, 0.5, 5, 16);
+      const recepMat = new THREE.MeshStandardMaterial({ color: 0x8a9a5b });
+      flowerGroup.add(new THREE.Mesh(recepGeo, recepMat));
+
+      // 2. 花瓣
+      for (let i = 0; i < 4; i++) {
+        const group = new THREE.Group();
+        group.userData = { type: 'Petal', id: i };
+        const shape = new THREE.Shape();
+        shape.moveTo(0, 0); 
+        shape.bezierCurveTo(7, 5, 8, 18, 0, 22); 
+        shape.bezierCurveTo(-8, 18, -7, 5, 0, 0);
+        const geo = new THREE.ExtrudeGeometry(shape, { depth: 0.2, bevelEnabled: true, bevelThickness: 0.1, bevelSize: 0.3 });
+        const mat = new THREE.MeshStandardMaterial({ color: 0xe082ff, side: THREE.DoubleSide, emissive: new THREE.Color(0x000000) });
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.rotation.x = -Math.PI / 3.2;
+        group.add(mesh);
+        group.rotation.y = (i * Math.PI) / 2;
+        flowerGroup.add(group);
+      }
+
+      // 3. 長雄蕊
+      for (let i = 0; i < 4; i++) {
+        const group = new THREE.Group();
+        group.userData = { type: 'LongStamen', id: i };
+        const purpleMat = new THREE.MeshStandardMaterial({ color: 0x6b21a8, emissive: new THREE.Color(0x000000) });
+        const whiteFilMat = new THREE.MeshStandardMaterial({ color: 0xffffff });
+        const filCurve = new THREE.CatmullRomCurve3([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 5, 4), new THREE.Vector3(0, 7.5, 7.5)]);
+        group.add(new THREE.Mesh(new THREE.TubeGeometry(filCurve, 20, 0.18, 8, false), whiteFilMat));
+        const connCurve = new THREE.CatmullRomCurve3([new THREE.Vector3(0, 7.5, 7.5), new THREE.Vector3(0, 8.5, 9.5), new THREE.Vector3(0, 5.5, 12), new THREE.Vector3(0, 4.5, 13.5)]);
+        group.add(new THREE.Mesh(new THREE.TubeGeometry(connCurve, 20, 0.55, 8, false), purpleMat));
+        const antherCurve = new THREE.CatmullRomCurve3([new THREE.Vector3(0, 4.5, 13.5), new THREE.Vector3(0, 4.8, 13.7), new THREE.Vector3(0, 5.0, 13.8)]);
+        group.add(new THREE.Mesh(new THREE.TubeGeometry(antherCurve, 15, 0.25, 8, false), purpleMat));
+        group.rotation.y = (i * Math.PI) / 2 + (Math.PI / 4);
+        flowerGroup.add(group);
+      }
+
+      // 4. 短雄蕊
+      for (let i = 0; i < 4; i++) {
+        const group = new THREE.Group();
+        group.userData = { type: 'ShortStamen', id: i };
+        const ssMat = new THREE.MeshStandardMaterial({ color: 0xffd700, emissive: new THREE.Color(0x000000) });
+        const filCurve = new THREE.CatmullRomCurve3([new THREE.Vector3(0,0,0), new THREE.Vector3(0,3,1), new THREE.Vector3(0,5,2.5)]);
+        group.add(new THREE.Mesh(new THREE.TubeGeometry(filCurve, 10, 0.15, 8, false), new THREE.MeshStandardMaterial({ color: 0xffffd0 })));
+        const antherGeo = new THREE.CylinderGeometry(0.08, 0.45, 2.8, 16); 
+        antherGeo.translate(0, 1.4, 0);
+        const anther = new THREE.Mesh(antherGeo, ssMat);
+        anther.position.set(0, 4.8, 2.4);
+        anther.rotation.x = -Math.PI / 8;
+        group.add(anther);
+        group.rotation.y = (i * Math.PI) / 2 + (Math.PI / 4);
+        flowerGroup.add(group);
+      }
+
+      // 5. 雌蕊
+      const pistilGroup = new THREE.Group();
+      pistilGroup.userData = { type: 'Pistil', id: 0 };
+      const pMat = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: new THREE.Color(0x000000) });
+      const pCurve = new THREE.CatmullRomCurve3([new THREE.Vector3(0,0,0), new THREE.Vector3(0,12,-2)]);
+      pistilGroup.add(new THREE.Mesh(new THREE.TubeGeometry(pCurve, 20, 0.15, 8, false), pMat));
+      flowerGroup.add(pistilGroup);
+    };
+
+    createFlower();
+
+    // 互動控制邏輯
+    let isDragging = false;
+    let autoRotate = true;
+    let previousMouse = { x: 0, y: 0 };
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+    let hoveredPart = null;
+
+    const findInteractiveParent = (object) => {
+      let target = object;
+      while (target.parent && !target.userData.type) target = target.parent;
+      return target.userData.type ? target : null;
+    };
+
+    const onPointerDown = (e) => { 
+      isDragging = true; 
+      autoRotate = false; 
+      previousMouse = { x: e.clientX, y: e.clientY }; 
+    };
+
+    const onPointerUp = (e) => {
+      isDragging = false;
+      const rect = mountRef.current.getBoundingClientRect();
+      mouse.x = ((e.clientX - rect.left) / width) * 2 - 1;
+      mouse.y = -((e.clientY - rect.top) / height) * 2 + 1;
+      raycaster.setFromCamera(mouse, camera);
+      const intersects = raycaster.intersectObjects(flowerGroup.children, true);
+      
+      if (intersects.length > 0) {
+        const target = findInteractiveParent(intersects[0].object);
+        if (target) {
+          const { type, id } = target.userData;
+          const key = type === 'Pistil' ? type : `${type}_${id}`;
+          setSelectedPart(partInfo[type]);
+          
+          setDissectedParts(prev => {
+            const next = new Set(prev);
+            if (next.has(key)) {
+              next.delete(key);
+              target.position.set(0, 0, 0);
+              target.rotation.y = type === 'Pistil' ? 0 : (id * Math.PI) / 2 + (type === 'Petal' ? 0 : Math.PI / 4);
+            } else {
+              next.add(key);
+              let tx = (id - 1.5) * 8; 
+              let ty = 0;
+              if (type === 'Pistil') { tx = 0; ty = 26; }
+              else if (type === 'Petal') ty = 21;
+              else if (type === 'LongStamen') ty = 16;
+              else if (type === 'ShortStamen') ty = 11;
+              target.position.set(tx, ty, 5);
+              target.rotation.y = 0;
+            }
+            return next;
+          });
+        }
+      } else {
+        setSelectedPart(null);
+      }
+    };
+
+    const onPointerMove = (e) => {
+      const rect = mountRef.current.getBoundingClientRect();
+      const currentX = ((e.clientX - rect.left) / width) * 2 - 1;
+      const currentY = -((e.clientY - rect.top) / height) * 2 + 1;
+
+      if (isDragging) {
+        const deltaX = e.clientX - previousMouse.x;
+        const deltaY = e.clientY - previousMouse.y;
+        flowerGroup.rotation.y += deltaX * 0.01;
+        flowerGroup.rotation.x += deltaY * 0.01;
+        previousMouse = { x: e.clientX, y: e.clientY };
+      }
+
+      // Hover 效果
+      mouse.x = currentX;
+      mouse.y = currentY;
+      raycaster.setFromCamera(mouse, camera);
+      const intersects = raycaster.intersectObjects(flowerGroup.children, true);
+      
+      if (hoveredPart) {
+        hoveredPart.traverse(child => { if (child.isMesh) child.material.emissive.setHex(0x000000); });
+        hoveredPart = null;
+      }
+
+      if (intersects.length > 0) {
+        const target = findInteractiveParent(intersects[0].object);
+        if (target) {
+          hoveredPart = target;
+          target.traverse(child => { if (child.isMesh) child.material.emissive.setHex(0x222222); });
+        }
+      }
+    };
+
+    // 動畫循環
+    let animationFrameId;
+    const animate = () => {
+      animationFrameId = requestAnimationFrame(animate);
+      if (autoRotate) {
+        flowerGroup.rotation.y += 0.005;
+      }
+      renderer.render(scene, camera);
+    };
+    animate();
+
+    const currentRef = mountRef.current;
+    currentRef.addEventListener('mousedown', onPointerDown);
+    currentRef.addEventListener('mouseup', onPointerUp);
+    currentRef.addEventListener('mousemove', onPointerMove);
+
+    return () => {
+      cancelAnimationFrame(animationFrameId);
+      currentRef.removeEventListener('mousedown', onPointerDown);
+      currentRef.removeEventListener('mouseup', onPointerUp);
+      currentRef.removeEventListener('mousemove', onPointerMove);
+      renderer.dispose();
+    };
+  }, [activeTab]);
+
+  return (
+    <div className="flex flex-col h-screen bg-slate-950 text-slate-100 font-sans overflow-hidden">
+      {/* Header */}
+      <header className="p-6 border-b border-slate-800 bg-slate-900/50 backdrop-blur-md flex justify-between items-center z-20">
+        <div>
+          <h1 className="text-2xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent flex items-center gap-2">
+            <Flower className="w-6 h-6 text-purple-400" />
+            {plantData.commonName}
+          </h1>
+          <p className="text-slate-400 italic text-sm">{plantData.scientificName}</p>
+        </div>
+        <nav className="flex bg-slate-800 p-1 rounded-xl">
+          <button 
+            onClick={() => setActiveTab('overview')}
+            className={`px-6 py-2 rounded-lg transition-all text-sm font-medium ${activeTab === 'overview' ? 'bg-purple-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-200'}`}
+          >
+            物種概述
+          </button>
+          <button 
+            onClick={() => setActiveTab('structure')}
+            className={`px-6 py-2 rounded-lg transition-all text-sm font-medium ${activeTab === 'structure' ? 'bg-purple-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-200'}`}
+          >
+            數位解剖
+          </button>
+        </nav>
+      </header>
+
+      <main className="flex-1 relative flex overflow-hidden">
+        {/* 左側資訊面板 */}
+        <aside className="w-96 p-6 overflow-y-auto border-r border-slate-800 bg-slate-900/40 z-10 backdrop-blur-sm">
+          {activeTab === 'overview' ? (
+            <div className="space-y-6 animate-in fade-in slide-in-from-left-4 duration-500">
+              <div className="relative rounded-2xl overflow-hidden aspect-video bg-slate-800 mb-6 group border border-slate-700">
+                <div className="absolute inset-0 flex items-center justify-center opacity-40 group-hover:opacity-60 transition-opacity">
+                   <Sprout className="w-16 h-16 text-slate-500" />
+                </div>
+                <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent">
+                  <span className="text-xs font-bold text-purple-300 uppercase">棲地實拍參考</span>
+                </div>
+              </div>
+
+              {plantData.features.map(f => (
+                <div key={f.id} className="p-5 rounded-2xl bg-slate-800/40 border border-slate-700/50 hover:border-purple-500/50 transition-all duration-300 group">
+                  <div className="flex items-center gap-3 mb-3 text-purple-400 group-hover:text-purple-300">
+                    <div className="p-2 rounded-lg bg-purple-500/10 group-hover:bg-purple-500/20">
+                       {f.icon}
+                    </div>
+                    <h3 className="font-bold">{f.title}</h3>
+                  </div>
+                  <p className="text-sm text-slate-400 leading-relaxed group-hover:text-slate-300 transition-colors">{f.desc}</p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="space-y-6 animate-in fade-in slide-in-from-left-4 duration-500">
+              <div className="p-5 rounded-2xl bg-purple-900/20 border border-purple-500/30 ring-1 ring-purple-500/20">
+                <div className="flex items-center gap-2 text-purple-300 mb-3">
+                  <Microscope className="w-5 h-5" />
+                  <span className="text-xs font-bold uppercase tracking-widest">解剖實驗室</span>
+                </div>
+                <p className="text-sm text-slate-300 leading-relaxed">
+                  點擊花朵的任何部位將其「分離」進行詳細觀察。野牡丹科特有的<span className="text-purple-400 font-bold underline underline-offset-4 ml-1">異型雄蕊</span>演化機制，是觀察植物適應授粉者的絕佳案例。
+                </p>
+              </div>
+              
+              {selectedPart ? (
+                <div className="p-6 rounded-2xl bg-slate-800 border border-purple-500/50 shadow-2xl shadow-purple-500/10 animate-in zoom-in-95 duration-300">
+                  <div className="flex justify-between items-start mb-4">
+                    <h3 className="text-2xl font-bold text-white">{selectedPart.name}</h3>
+                    <div className="px-2 py-1 rounded bg-purple-500/20 text-[10px] text-purple-300 font-bold uppercase tracking-tighter border border-purple-500/30">
+                      零件觀察中
+                    </div>
+                  </div>
+                  <p className="text-purple-200 text-sm mb-6 leading-relaxed bg-purple-500/5 p-3 rounded-xl">
+                    {selectedPart.desc}
+                  </p>
+                  <div className="pt-5 border-t border-slate-700/50">
+                    <span className="text-[10px] text-slate-500 font-black uppercase tracking-[0.2em] mb-2 block">生物演化意義</span>
+                    <p className="text-sm text-slate-300 leading-relaxed italic">
+                      「{selectedPart.func}」
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="h-72 flex flex-col items-center justify-center text-slate-600 border-2 border-dashed border-slate-800 rounded-3xl group hover:border-slate-700 transition-colors">
+                  <div className="w-16 h-16 rounded-full bg-slate-800/50 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                    <MousePointer2 className="w-8 h-8 opacity-20" />
+                  </div>
+                  <p className="text-sm font-medium">請在 3D 模型上點選部位</p>
+                  <p className="text-xs opacity-50 mt-1 italic">點擊右側花朵查看細節</p>
+                </div>
+              )}
+
+              <div className="pt-4 flex flex-col gap-2">
+                 <button 
+                  onClick={() => {
+                    setDissectedParts(new Set());
+                    setSelectedPart(null);
+                    window.location.reload(); // 簡單重置方式
+                  }}
+                  className="w-full flex items-center justify-center gap-2 p-4 rounded-xl border border-slate-800 text-slate-400 hover:bg-slate-800 hover:text-white transition-all active:scale-[0.98]"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                  <span>還原花朵結構</span>
+                </button>
+              </div>
+            </div>
+          )}
+        </aside>
+
+        {/* 右側 3D 內容區 */}
+        <section className="flex-1 relative bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-slate-900 via-slate-950 to-black overflow-hidden">
+          {activeTab === 'structure' ? (
+            <div ref={mountRef} className="w-full h-full cursor-grab active:cursor-grabbing" />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center p-12 animate-in fade-in duration-700">
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-12 max-w-5xl items-center">
+                  <div className="relative group">
+                    <div className="absolute -inset-1 bg-gradient-to-r from-purple-500 to-pink-500 rounded-3xl blur opacity-25 group-hover:opacity-40 transition duration-1000"></div>
+                    <div className="relative aspect-square bg-slate-900 rounded-3xl border border-slate-800 overflow-hidden flex flex-col items-center justify-center">
+                      <Flower className="w-32 h-32 text-purple-500/20 mb-4" />
+                      <p className="text-slate-500 text-sm font-mono tracking-widest uppercase">Specimen Mode</p>
+                    </div>
+                    {/* 裝飾性的小圓點 */}
+                    <div className="absolute top-4 left-4 w-2 h-2 rounded-full bg-purple-500/50"></div>
+                    <div className="absolute bottom-4 right-4 w-2 h-2 rounded-full bg-pink-500/50"></div>
+                  </div>
+                  <div className="flex flex-col">
+                    <div className="inline-block px-3 py-1 rounded-full bg-purple-500/10 border border-purple-500/20 text-purple-400 text-xs font-bold w-fit mb-4">
+                      台灣特有種植物
+                    </div>
+                    <h2 className="text-4xl font-black mb-6 italic tracking-tight text-white leading-tight">
+                      Bredia oldhamii <br/>
+                      <span className="text-2xl not-italic font-normal text-slate-400 tracking-normal underline decoration-purple-500/50 underline-offset-8">金石榴數位典藏</span>
+                    </h2>
+                    <p className="text-slate-400 leading-relaxed text-lg mb-8">
+                      毛布勒德藤分布於全島中低海拔山區。其演化最精妙之處，在於異型雄蕊的「分工合作」：黃色短雄蕊負責提供食物以誘引昆蟲，而紫色鐮刀狀長雄蕊則精準地將花粉黏附於昆蟲背部，完成異花授粉。
+                    </p>
+                    <div className="flex gap-4">
+                      <button 
+                        onClick={() => setActiveTab('structure')}
+                        className="px-8 py-3 bg-white text-black font-bold rounded-xl hover:bg-purple-100 transition-colors flex items-center gap-2 shadow-xl"
+                      >
+                        進入數位解剖室
+                        <ChevronRight className="w-5 h-5" />
+                      </button>
+                    </div>
+                  </div>
+               </div>
+            </div>
+          )}
+          
+          {/* 3D 場景浮動控制列 */}
+          {activeTab === 'structure' && (
+            <>
+              <div className="absolute top-8 right-8 flex flex-col gap-2">
+                <div className="p-3 bg-black/60 backdrop-blur-md rounded-xl border border-white/5 text-[10px] text-slate-400 uppercase tracking-widest font-bold flex items-center gap-2">
+                   <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                   Real-time Render
+                </div>
+              </div>
+              
+              <div className="absolute bottom-10 left-1/2 -translate-x-1/2 flex items-center gap-6 bg-slate-900/90 backdrop-blur-2xl px-8 py-4 rounded-2xl border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.5)]">
+                 <div className="flex items-center gap-6">
+                   <div className="flex items-center gap-2.5">
+                     <div className="w-3.5 h-3.5 rounded-full bg-[#e082ff] shadow-[0_0_10px_rgba(224,130,255,0.5)]" />
+                     <span className="text-xs text-slate-300 font-medium">花瓣</span>
+                   </div>
+                   <div className="flex items-center gap-2.5">
+                     <div className="w-3.5 h-3.5 rounded-full bg-[#6b21a8] shadow-[0_0_10px_rgba(107,33,168,0.5)]" />
+                     <span className="text-xs text-slate-300 font-medium">受粉雄蕊</span>
+                   </div>
+                   <div className="flex items-center gap-2.5">
+                     <div className="w-3.5 h-3.5 rounded-full bg-[#ffd700] shadow-[0_0_10px_rgba(255,215,0,0.5)]" />
+                     <span className="text-xs text-slate-300 font-medium">餵食雄蕊</span>
+                   </div>
+                   <div className="flex items-center gap-2.5">
+                     <div className="w-3.5 h-3.5 rounded-full bg-white shadow-[0_0_10px_rgba(255,255,255,0.5)]" />
+                     <span className="text-xs text-slate-300 font-medium">雌蕊</span>
+                   </div>
+                 </div>
+              </div>
+            </>
+          )}
+        </section>
+      </main>
+
+      {/* Footer / Status Bar */}
+      <footer className="px-6 py-2 border-t border-slate-900 bg-black flex justify-between items-center text-[10px] text-slate-500 font-mono tracking-wider uppercase">
+        <div className="flex gap-4">
+          <span>Source: Digital Herbarium Project</span>
+          <span>© 2024 Botanical Simulation</span>
+        </div>
+        <div className="flex items-center gap-3">
+          <span>Interaction: Click to Dissect | Drag to Orbit</span>
+        </div>
+      </footer>
+    </div>
+  );
+};
+
+export default App;
